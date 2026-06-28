@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# R session artifacts
+.Rhistory
+*.Rhistory
+.Rproj.user/
+.RData

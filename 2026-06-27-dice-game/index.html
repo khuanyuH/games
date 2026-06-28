@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Press Your Luck — Dice Game</title>
+<style>
+  :root {
+    --bg: #0f1220;
+    --panel: #1a1f36;
+    --panel-2: #232a47;
+    --accent: #6ea8fe;
+    --accent-2: #ffd166;
+    --good: #5cdb95;
+    --bad: #ff6b6b;
+    --text: #e8ecf5;
+    --muted: #9aa3c0;
+    --line: #2c3354;
+    --shadow: 0 10px 30px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+    background: radial-gradient(1200px 600px at 50% -10%, #1b2140 0%, var(--bg) 60%);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px 60px;
+  }
+  h1 { margin: 0 0 2px; font-size: 26px; letter-spacing: .3px; }
+  .subtitle { color: var(--muted); font-size: 13px; margin-bottom: 18px; text-align: center; }
+  .settings {
+    width: 100%; max-width: 760px; margin-bottom: 14px;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    flex-wrap: wrap; font-size: 13px; color: var(--muted);
+  }
+  .settings label { display: flex; align-items: center; gap: 8px; }
+  .settings select {
+    font: inherit; color: var(--text); background: var(--panel-2);
+    border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; cursor: pointer;
+  }
+  .coin { font-style: italic; }
+  .board {
+    width: 100%;
+    max-width: 760px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-bottom: 16px;
+  }
+  .player-card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 16px;
+    box-shadow: var(--shadow);
+    transition: border-color .2s, transform .2s;
+  }
+  .player-card.active {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+  }
+  .player-card .name {
+    display: flex; align-items: center; justify-content: space-between;
+    font-weight: 600; font-size: 16px; margin-bottom: 8px;
+  }
+  .badge {
+    font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 999px;
+    background: var(--panel-2); color: var(--muted);
+  }
+  .badge.turn { background: var(--accent); color: #07142e; }
+  .total { font-size: 40px; font-weight: 800; line-height: 1; margin: 4px 0 10px; }
+  .total small { font-size: 13px; color: var(--muted); font-weight: 500; }
+  .slots { display: flex; gap: 6px; }
+  .slot {
+    flex: 1; text-align: center; font-size: 13px; padding: 6px 0;
+    border-radius: 8px; background: var(--panel-2); color: var(--muted);
+  }
+  .slot.done { color: var(--text); }
+  .slot.bust { color: var(--bad); }
+
+  .stage {
+    width: 100%; max-width: 760px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 22px;
+    box-shadow: var(--shadow);
+    text-align: center;
+  }
+  .turn-banner { color: var(--muted); font-size: 14px; margin-bottom: 14px; min-height: 20px; }
+  .turn-banner b { color: var(--accent-2); }
+
+  .die {
+    width: 92px; height: 92px; margin: 0 auto 14px;
+    background: #fff; border-radius: 18px;
+    display: grid; grid-template-columns: repeat(3,1fr); grid-template-rows: repeat(3,1fr);
+    padding: 12px; box-shadow: inset 0 -6px 12px rgba(0,0,0,.12), 0 8px 18px rgba(0,0,0,.35);
+  }
+  .die.rolling { animation: shake .5s ease; }
+  @keyframes shake {
+    0%,100% { transform: rotate(0) translateY(0); }
+    25% { transform: rotate(-12deg) translateY(-6px); }
+    50% { transform: rotate(10deg) translateY(4px); }
+    75% { transform: rotate(-6deg) translateY(-2px); }
+  }
+  .pip { display: flex; align-items: center; justify-content: center; }
+  .pip span { width: 16px; height: 16px; border-radius: 50%; background: #1a1f36; }
+
+  .turn-sum { font-size: 15px; color: var(--muted); margin-bottom: 4px; }
+  .turn-sum b { color: var(--good); font-size: 22px; }
+  .rolled-row { font-size: 13px; color: var(--muted); min-height: 22px; margin-bottom: 16px; }
+  .chip {
+    display: inline-block; min-width: 22px; padding: 2px 7px; margin: 0 2px;
+    border-radius: 6px; background: var(--panel-2); color: var(--text); font-weight: 600;
+  }
+
+  .controls { display: flex; gap: 12px; justify-content: center; }
+  button {
+    font: inherit; font-weight: 600; cursor: pointer;
+    border: none; border-radius: 10px; padding: 13px 26px;
+    transition: transform .08s, filter .15s, opacity .15s;
+  }
+  button:active { transform: translateY(1px); }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-roll { background: var(--accent); color: #07142e; }
+  .btn-bank { background: var(--accent-2); color: #2a1e00; }
+  .btn-ghost { background: var(--panel-2); color: var(--text); }
+  button:not(:disabled):hover { filter: brightness(1.08); }
+
+  .log {
+    width: 100%; max-width: 760px; margin-top: 16px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    padding: 12px 16px; max-height: 170px; overflow-y: auto;
+    font-size: 13px; line-height: 1.7;
+  }
+  .log .entry { color: var(--muted); }
+  .log .entry .who { font-weight: 700; }
+  .log .who.player { color: var(--accent); }
+  .log .who.agent { color: var(--accent-2); }
+  .log .entry.bust { color: var(--bad); }
+  .log .entry.bank { color: var(--good); }
+
+  .overlay {
+    position: fixed; inset: 0; background: rgba(7,10,22,.78);
+    display: none; align-items: center; justify-content: center; z-index: 10;
+  }
+  .overlay.show { display: flex; }
+  .modal {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 18px;
+    padding: 30px 36px; text-align: center; box-shadow: var(--shadow); max-width: 380px;
+  }
+  .modal h2 { margin: 0 0 8px; font-size: 26px; }
+  .modal p { color: var(--muted); margin: 0 0 20px; }
+  footer { color: var(--muted); font-size: 12px; margin-top: 22px; text-align: center; }
+  footer a { color: var(--accent); }
+</style>
+</head>
+<body>
+  <h1>🎲 Press Your Luck</h1>
+  <div class="subtitle">
+    Roll to build your turn sum, then <b>bank</b> it — but roll a number you've already rolled this turn and you <b>bust</b>.<br>
+    Three turns each. Highest total wins.
+  </div>
+
+  <div class="settings">
+    <label>Opponent:
+      <select id="difficulty">
+        <option value="perfect">Perfect (solved)</option>
+        <option value="easy">Risk-aware (beatable)</option>
+      </select>
+    </label>
+    <span class="coin" id="coin">First move is decided by coin flip each game.</span>
+  </div>
+
+  <div class="board">
+    <div class="player-card" id="card-player">
+      <div class="name">You <span class="badge" id="badge-player">—</span></div>
+      <div class="total" id="total-player">0 <small>pts</small></div>
+      <div class="slots" id="slots-player"></div>
+    </div>
+    <div class="player-card" id="card-agent">
+      <div class="name">Computer <span class="badge" id="badge-agent">—</span></div>
+      <div class="total" id="total-agent">0 <small>pts</small></div>
+      <div class="slots" id="slots-agent"></div>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="turn-banner" id="banner">Your move — roll the die to begin.</div>
+    <div class="die" id="die"></div>
+    <div class="turn-sum">Turn sum: <b id="turn-sum">0</b></div>
+    <div class="rolled-row" id="rolled-row">Rolled this turn: —</div>
+    <div class="controls">
+      <button class="btn-roll" id="btn-roll">Roll</button>
+      <button class="btn-bank" id="btn-bank" disabled>Bank</button>
+    </div>
+  </div>
+
+  <div class="log" id="log"></div>
+
+  <footer>Prototype · risk-aware computer opponent · <a href="#" id="rules-link">how the computer decides</a></footer>
+
+  <div class="overlay" id="overlay">
+    <div class="modal">
+      <h2 id="modal-title">Game over</h2>
+      <p id="modal-text"></p>
+      <button class="btn-roll" id="btn-restart">Play again</button>
+    </div>
+  </div>
+
+<script>
+(() => {
+  "use strict";
+
+  // ---------- Pip layouts for each die face ----------
+  const PIPS = {
+    1: [4],
+    2: [0, 8],
+    3: [0, 4, 8],
+    4: [0, 2, 6, 8],
+    5: [0, 2, 4, 6, 8],
+    6: [0, 2, 3, 5, 6, 8],
+  };
+
+  // ---------- Exact optimal policy (backward induction) ----------
+  // The game is a finite, perfect-information, zero-sum stochastic game, so it is
+  // solvable exactly. State reduces to (t, d, mask):
+  //   t    = half-turn index 0..5 in the fixed order A,B,A,B,A,B (A = first mover)
+  //   d    = A_total - B_total  (only the score *difference* matters)
+  //   mask = set of die faces already rolled this turn (bit i => face i+1)
+  // Value is A's payoff (win=1, tie=0.5, loss=0). A maximizes, B minimizes.
+  const SUMSET = Array.from({ length: 64 }, (_, m) => {
+    let s = 0; for (let i = 0; i < 6; i++) if (m >> i & 1) s += i + 1; return s;
+  });
+  const _vs = new Map(), _vd = new Map();
+  const termVal = (d) => (d > 0 ? 1 : d === 0 ? 0.5 : 0);
+  function vStart(t, d) {
+    if (t === 6) return termVal(d);
+    const key = t + ":" + d;
+    if (_vs.has(key)) return _vs.get(key);
+    let v = 0;
+    for (let i = 0; i < 6; i++) v += vDec(t, d, 1 << i); // forced first roll, never busts
+    v /= 6;
+    _vs.set(key, v);
+    return v;
+  }
+  function vDec(t, d, mask) {
+    const key = t + ":" + d + ":" + mask;
+    if (_vd.has(key)) return _vd.get(key);
+    const activeA = (t % 2 === 0);
+    const s = SUMSET[mask];
+    const bank = activeA ? vStart(t + 1, d + s) : vStart(t + 1, d - s);
+    let roll = 0;
+    for (let i = 0; i < 6; i++) {
+      const bit = 1 << i;
+      roll += (mask & bit) ? vStart(t + 1, d) : vDec(t, d, mask | bit);
+    }
+    roll /= 6;
+    const v = activeA ? Math.max(bank, roll) : Math.min(bank, roll);
+    _vd.set(key, v);
+    return v;
+  }
+  // Should the player active at half-turn t bank, given score diff d (A-B) and rolled mask?
+  function optimalShouldBank(t, d, mask) {
+    const activeA = (t % 2 === 0);
+    const s = SUMSET[mask];
+    const bank = activeA ? vStart(t + 1, d + s) : vStart(t + 1, d - s);
+    let roll = 0;
+    for (let i = 0; i < 6; i++) {
+      const bit = 1 << i;
+      roll += (mask & bit) ? vStart(t + 1, d) : vDec(t, d, mask | bit);
+    }
+    roll /= 6;
+    return activeA ? bank >= roll : bank <= roll;
+  }
+  vStart(0, 0); // warm the cache once
+
+  function rolledToMask(set) {
+    let m = 0; set.forEach((v) => (m |= 1 << (v - 1))); return m;
+  }
+
+  // ---------- Game state ----------
+  const TURNS_PER_PLAYER = 3;
+  let state;
+
+  function newState(firstMover, difficulty) {
+    return {
+      totals: { player: 0, agent: 0 },
+      history: { player: [], agent: [] },   // banked amount per completed turn, or 'bust'
+      firstMover,                           // 'player' or 'agent' (= seat A, the first mover)
+      difficulty,                           // 'perfect' or 'easy'
+      current: firstMover,                  // whose turn
+      turnSum: 0,
+      rolled: new Set(),
+      over: false,
+      busy: false,                          // lock inputs during animation / agent thinking
+    };
+  }
+
+  // Absolute half-turn index in the A,B,A,B,A,B sequence (A = firstMover).
+  function halfTurnIndex() {
+    return state.history.player.length + state.history.agent.length;
+  }
+  // Score difference from the FIRST MOVER's perspective (DP's "A - B").
+  function scoreDiffA() {
+    const a = state.firstMover, b = a === "player" ? "agent" : "player";
+    return state.totals[a] - state.totals[b];
+  }
+
+  // ---------- DOM ----------
+  const el = (id) => document.getElementById(id);
+  const dieEl = el("die");
+  const bannerEl = el("banner");
+  const turnSumEl = el("turn-sum");
+  const rolledRowEl = el("rolled-row");
+  const btnRoll = el("btn-roll");
+  const btnBank = el("btn-bank");
+  const logEl = el("log");
+
+  function renderDie(value) {
+    dieEl.innerHTML = "";
+    for (let i = 0; i < 9; i++) {
+      const cell = document.createElement("div");
+      cell.className = "pip";
+      if (value && PIPS[value].includes(i)) {
+        const s = document.createElement("span");
+        cell.appendChild(s);
+      }
+      dieEl.appendChild(cell);
+    }
+  }
+
+  function renderSlots(who) {
+    const container = el("slots-" + who);
+    container.innerHTML = "";
+    for (let i = 0; i < TURNS_PER_PLAYER; i++) {
+      const slot = document.createElement("div");
+      slot.className = "slot";
+      const h = state.history[who][i];
+      if (h === undefined) {
+        slot.textContent = "·";
+      } else if (h === "bust") {
+        slot.textContent = "BUST";
+        slot.classList.add("bust");
+      } else {
+        slot.textContent = "+" + h;
+        slot.classList.add("done");
+      }
+      container.appendChild(slot);
+    }
+  }
+
+  function render() {
+    el("total-player").innerHTML = state.totals.player + ' <small>pts</small>';
+    el("total-agent").innerHTML = state.totals.agent + ' <small>pts</small>';
+    renderSlots("player");
+    renderSlots("agent");
+
+    el("card-player").classList.toggle("active", state.current === "player" && !state.over);
+    el("card-agent").classList.toggle("active", state.current === "agent" && !state.over);
+    el("badge-player").className = "badge" + (state.current === "player" && !state.over ? " turn" : "");
+    el("badge-player").textContent = state.current === "player" && !state.over ? "YOUR TURN" : "";
+    el("badge-agent").className = "badge" + (state.current === "agent" && !state.over ? " turn" : "");
+    el("badge-agent").textContent = state.current === "agent" && !state.over ? "THINKING" : "";
+
+    turnSumEl.textContent = state.turnSum;
+    const rolledArr = [...state.rolled].sort();
+    rolledRowEl.innerHTML = "Rolled this turn: " +
+      (rolledArr.length ? rolledArr.map((n) => `<span class="chip">${n}</span>`).join("") : "—");
+
+    const playerActive = state.current === "player" && !state.over && !state.busy;
+    btnRoll.disabled = !playerActive;
+    btnBank.disabled = !playerActive || state.turnSum === 0;
+  }
+
+  function log(who, text, cls = "") {
+    const entry = document.createElement("div");
+    entry.className = "entry " + cls;
+    const label = who ? `<span class="who ${who}">${who === "player" ? "You" : "Computer"}:</span> ` : "";
+    entry.innerHTML = label + text;
+    logEl.prepend(entry);
+  }
+
+  // ---------- Core mechanics ----------
+  function rollValue() {
+    return Math.floor(Math.random() * 6) + 1;
+  }
+
+  function turnsTaken(who) {
+    return state.history[who].length;
+  }
+
+  // Apply a roll for the current player. Returns { value, bust }.
+  function applyRoll() {
+    const value = rollValue();
+    const bust = state.rolled.has(value);
+    if (bust) {
+      state.turnSum = 0;
+    } else {
+      state.rolled.add(value);
+      state.turnSum += value;
+    }
+    return { value, bust };
+  }
+
+  function bankTurn() {
+    state.totals[state.current] += state.turnSum;
+    state.history[state.current].push(state.turnSum);
+  }
+
+  function bustTurn() {
+    state.history[state.current].push("bust");
+  }
+
+  function gameComplete() {
+    return turnsTaken("player") >= TURNS_PER_PLAYER &&
+           turnsTaken("agent") >= TURNS_PER_PLAYER;
+  }
+
+  // Decide who acts next and advance, or end the game.
+  function endTurn() {
+    state.turnSum = 0;
+    state.rolled = new Set();
+
+    if (gameComplete()) {
+      finishGame();
+      return;
+    }
+    // Alternate, but skip a player who has already used all 3 turns.
+    state.current = state.current === "player" ? "agent" : "player";
+    if (turnsTaken(state.current) >= TURNS_PER_PLAYER) {
+      state.current = state.current === "player" ? "agent" : "player";
+    }
+
+    render();
+    if (state.current === "agent") {
+      bannerEl.innerHTML = "<b>Computer</b> is taking its turn…";
+      setTimeout(agentStep, 800);
+    } else {
+      bannerEl.innerHTML = "Your move — roll to start turn " + (turnsTaken("player") + 1) + " of 3.";
+    }
+  }
+
+  // ---------- Player actions ----------
+  function animateRoll(value, after) {
+    state.busy = true;
+    render();
+    dieEl.classList.remove("rolling");
+    void dieEl.offsetWidth; // restart animation
+    dieEl.classList.add("rolling");
+    let ticks = 0;
+    const spin = setInterval(() => {
+      renderDie(rollValue());
+      if (++ticks >= 6) {
+        clearInterval(spin);
+        renderDie(value);
+        state.busy = false;
+        after();
+      }
+    }, 60);
+  }
+
+  btnRoll.addEventListener("click", () => {
+    if (state.current !== "player" || state.busy || state.over) return;
+    const { value, bust } = applyRoll();
+    animateRoll(value, () => {
+      if (bust) {
+        log("player", `rolled a <b>${value}</b> — already rolled it. <b>BUST!</b> Turn lost.`, "bust");
+        bustTurn();
+        render();
+        setTimeout(endTurn, 700);
+      } else {
+        log("player", `rolled a <b>${value}</b>. Turn sum is now <b>${state.turnSum}</b>.`);
+        render();
+      }
+    });
+  });
+
+  btnBank.addEventListener("click", () => {
+    if (state.current !== "player" || state.busy || state.over || state.turnSum === 0) return;
+    const banked = state.turnSum;
+    bankTurn();
+    log("player", `banked <b>+${banked}</b>. Total: <b>${state.totals.player}</b>.`, "bank");
+    render();
+    setTimeout(endTurn, 500);
+  });
+
+  // ---------- Computer agent ----------
+  // Risk-aware decision. After each roll the agent weighs the chance of busting
+  // (it busts if it rolls any number already seen this turn) against the expected
+  // gain from one more roll, with catch-up aggression on its final turn.
+  function agentWantsToRoll() {
+    const k = state.rolled.size;                  // distinct numbers seen this turn
+    const unseen = [];
+    for (let v = 1; v <= 6; v++) if (!state.rolled.has(v)) unseen.push(v);
+    if (unseen.length === 0) return false;        // any roll would bust
+
+    const bustProb = k / 6;
+    const sumUnseen = unseen.reduce((a, b) => a + b, 0);
+    // Expected change in score from rolling once then banking:
+    //   gain on success (prob (6-k)/6) averages sumUnseen/6 across faces,
+    //   loss on bust (prob k/6) forfeits the whole turn sum.
+    const evDelta = sumUnseen / 6 - bustProb * state.turnSum;
+
+    // Catch-up: if this is the agent's last turn and banking now still loses,
+    // it must keep gambling while a non-busting roll is still possible.
+    const agentTurnsLeft = TURNS_PER_PLAYER - turnsTaken("agent"); // includes current
+    const deficitIfBankNow = state.totals.player - (state.totals.agent + state.turnSum);
+    if (agentTurnsLeft === 1 && deficitIfBankNow > 0) return true;
+
+    // Protect-the-lead: if banking now clinches the game, take it.
+    if (agentTurnsLeft === 1 && state.totals.agent + state.turnSum > state.totals.player) {
+      return false;
+    }
+
+    return evDelta > 0;
+  }
+
+  // Dispatch on difficulty: 'perfect' uses the exact solved policy, 'easy' the heuristic.
+  function agentWantsToBank() {
+    if (state.difficulty === "perfect") {
+      return optimalShouldBank(halfTurnIndex(), scoreDiffA(), rolledToMask(state.rolled));
+    }
+    return !agentWantsToRoll();
+  }
+
+  function agentStep() {
+    if (state.over) return;
+    // Must roll at least once.
+    const mustRoll = state.turnSum === 0;
+    if (!mustRoll && agentWantsToBank()) {
+      const banked = state.turnSum;
+      bankTurn();
+      const why = state.difficulty === "perfect" ? "optimal to lock in here" : "turn sum looked good enough to lock in";
+      log("agent", `banks <b>+${banked}</b> (${why}). Total: <b>${state.totals.agent}</b>.`, "bank");
+      render();
+      setTimeout(endTurn, 700);
+      return;
+    }
+
+    const { value, bust } = applyRoll();
+    animateRoll(value, () => {
+      if (bust) {
+        log("agent", `rolls a <b>${value}</b> — already had it. <b>BUST!</b> Turn lost.`, "bust");
+        bustTurn();
+        render();
+        setTimeout(endTurn, 800);
+      } else {
+        log("agent", `rolls a <b>${value}</b>. Turn sum is now <b>${state.turnSum}</b>.`);
+        render();
+        setTimeout(agentStep, 850);
+      }
+    });
+  }
+
+  // ---------- End game ----------
+  function finishGame() {
+    state.over = true;
+    render();
+    const p = state.totals.player, a = state.totals.agent;
+    let title, text;
+    if (p > a) { title = "🏆 You win!"; text = `Final score — You ${p}, Computer ${a}.`; }
+    else if (a > p) { title = "Computer wins"; text = `Final score — Computer ${a}, You ${p}.`; }
+    else { title = "It's a tie!"; text = `Both finished on ${p}.`; }
+    bannerEl.innerHTML = "Game over.";
+    el("modal-title").textContent = title;
+    el("modal-text").textContent = text;
+    el("overlay").classList.add("show");
+    log("", `<b>Game over.</b> ${text}`);
+  }
+
+  // ---------- Setup ----------
+  function start() {
+    const difficulty = el("difficulty").value;
+    const firstMover = Math.random() < 0.5 ? "player" : "agent"; // coin flip each game
+    state = newState(firstMover, difficulty);
+    el("overlay").classList.remove("show");
+    logEl.innerHTML = "";
+    renderDie(0);
+    render();
+
+    const oppName = difficulty === "perfect" ? "the perfect (solved) opponent" : "the risk-aware opponent";
+    if (firstMover === "player") {
+      el("coin").textContent = "🪙 Coin flip: you won the toss — you go first.";
+      log("", `New game vs ${oppName}. Coin flip — <b>you go first</b>. Good luck!`);
+      bannerEl.innerHTML = "Your move — roll the die to begin.";
+    } else {
+      el("coin").textContent = "🪙 Coin flip: the computer won the toss — it goes first.";
+      log("", `New game vs ${oppName}. Coin flip — <b>computer goes first</b>.`);
+      bannerEl.innerHTML = "<b>Computer</b> won the toss and starts…";
+      setTimeout(agentStep, 900);
+    }
+  }
+
+  el("difficulty").addEventListener("change", start);
+
+  el("btn-restart").addEventListener("click", start);
+  el("rules-link").addEventListener("click", (e) => {
+    e.preventDefault();
+    alert(
+      "How the computer decides:\n\n" +
+      "PERFECT (solved): this game is a finite, perfect-information, zero-sum game, so it can be\n" +
+      "solved exactly by backward induction. The agent plays the provably optimal move — it\n" +
+      "maximizes its probability of WINNING (not its points), so it pushes harder when behind and\n" +
+      "banks conservatively when ahead, calibrated to the exact score gap and turns left.\n\n" +
+      "Under perfect play by both sides, the SECOND mover wins ~56.9% vs ~39.5% (3.6% ties) —\n" +
+      "acting second is a real advantage, which is why first move is decided by a coin flip.\n\n" +
+      "RISK-AWARE (beatable): a simpler heuristic — it compares its bust chance against the average\n" +
+      "points a safe roll would add, and rolls only when the expected gain wins out."
+    );
+  });
+
+  start();
+})();
+</script>
+</body>
+</html>
