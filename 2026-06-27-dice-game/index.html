@@ -32,6 +32,18 @@
   }
   h1 { margin: 0 0 2px; font-size: 26px; letter-spacing: .3px; }
   .subtitle { color: var(--muted); font-size: 13px; margin-bottom: 18px; text-align: center; }
+  .tabs {
+    width: 100%; max-width: 760px; margin-bottom: 16px;
+    display: flex; gap: 6px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px; padding: 6px;
+  }
+  .tab {
+    flex: 1; text-align: center; padding: 10px 12px; border-radius: 8px;
+    font-weight: 600; font-size: 14px; color: var(--muted); cursor: pointer;
+    background: transparent; border: none; transition: background .15s, color .15s;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { background: var(--accent); color: #07142e; }
   .settings {
     width: 100%; max-width: 760px; margin-bottom: 14px;
     display: flex; align-items: center; justify-content: space-between; gap: 12px;
@@ -166,8 +178,13 @@
     Three turns each. Highest total wins.
   </div>
 
+  <div class="tabs">
+    <button class="tab active" id="tab-cpu" data-mode="cpu">🤖 vs Computer</button>
+    <button class="tab" id="tab-pvp" data-mode="pvp">👥 2 Players (same screen)</button>
+  </div>
+
   <div class="settings">
-    <label>Opponent:
+    <label id="opp-setting">Opponent:
       <select id="difficulty">
         <option value="perfect">Perfect (solved)</option>
         <option value="easy">Risk-aware (beatable)</option>
@@ -178,12 +195,12 @@
 
   <div class="board">
     <div class="player-card" id="card-player">
-      <div class="name">You <span class="badge" id="badge-player">—</span></div>
+      <div class="name"><span id="name-player">You</span> <span class="badge" id="badge-player">—</span></div>
       <div class="total" id="total-player">0 <small>pts</small></div>
       <div class="slots" id="slots-player"></div>
     </div>
     <div class="player-card" id="card-agent">
-      <div class="name">Computer <span class="badge" id="badge-agent">—</span></div>
+      <div class="name"><span id="name-agent">Computer</span> <span class="badge" id="badge-agent">—</span></div>
       <div class="total" id="total-agent">0 <small>pts</small></div>
       <div class="slots" id="slots-agent"></div>
     </div>
@@ -202,7 +219,7 @@
 
   <div class="log" id="log"></div>
 
-  <footer>Prototype · risk-aware computer opponent · <a href="#" id="rules-link">how the computer decides</a></footer>
+  <footer>Prototype · vs computer (solved or risk-aware) or 2-player hot-seat · <a href="#" id="rules-link">how the computer decides</a></footer>
 
   <div class="overlay" id="overlay">
     <div class="modal">
@@ -287,18 +304,34 @@
   const TURNS_PER_PLAYER = 3;
   let state;
 
-  function newState(firstMover, difficulty) {
+  function newState(mode, firstMover, difficulty) {
     return {
+      mode,                                 // 'cpu' (vs computer) or 'pvp' (two humans, same screen)
       totals: { player: 0, agent: 0 },
       history: { player: [], agent: [] },   // banked amount per completed turn, or 'bust'
       firstMover,                           // 'player' or 'agent' (= seat A, the first mover)
-      difficulty,                           // 'perfect' or 'easy'
+      difficulty,                           // 'perfect' or 'easy' (only used in cpu mode)
       current: firstMover,                  // whose turn
       turnSum: 0,
       rolled: new Set(),
       over: false,
       busy: false,                          // lock inputs during animation / agent thinking
     };
+  }
+
+  // Seat 'player' and seat 'agent' map to different labels/controllers per mode.
+  function displayName(seat) {
+    if (state.mode === "pvp") return seat === "player" ? "Player 1" : "Player 2";
+    return seat === "player" ? "You" : "Computer";
+  }
+  // Is the given seat controlled by a human? In pvp, both are; in cpu, only 'player'.
+  function isHuman(seat) {
+    return state.mode === "pvp" || seat === "player";
+  }
+  // Grammatical "<name>'s move" (special-casing "You" -> "Your").
+  function movePhrase(seat) {
+    const n = displayName(seat);
+    return n === "You" ? "Your move" : `${n}'s move`;
   }
 
   // Absolute half-turn index in the A,B,A,B,A,B sequence (A = firstMover).
@@ -360,27 +393,30 @@
     renderSlots("player");
     renderSlots("agent");
 
-    el("card-player").classList.toggle("active", state.current === "player" && !state.over);
-    el("card-agent").classList.toggle("active", state.current === "agent" && !state.over);
-    el("badge-player").className = "badge" + (state.current === "player" && !state.over ? " turn" : "");
-    el("badge-player").textContent = state.current === "player" && !state.over ? "YOUR TURN" : "";
-    el("badge-agent").className = "badge" + (state.current === "agent" && !state.over ? " turn" : "");
-    el("badge-agent").textContent = state.current === "agent" && !state.over ? "THINKING" : "";
+    el("name-player").textContent = displayName("player");
+    el("name-agent").textContent = displayName("agent");
+
+    for (const seat of ["player", "agent"]) {
+      const active = state.current === seat && !state.over;
+      el("card-" + seat).classList.toggle("active", active);
+      el("badge-" + seat).className = "badge" + (active ? " turn" : "");
+      el("badge-" + seat).textContent = active ? (isHuman(seat) ? "TURN" : "THINKING") : "";
+    }
 
     turnSumEl.textContent = state.turnSum;
     const rolledArr = [...state.rolled].sort();
     rolledRowEl.innerHTML = "Rolled this turn: " +
       (rolledArr.length ? rolledArr.map((n) => `<span class="chip">${n}</span>`).join("") : "—");
 
-    const playerActive = state.current === "player" && !state.over && !state.busy;
-    btnRoll.disabled = !playerActive;
-    btnBank.disabled = !playerActive || state.turnSum === 0;
+    const activeHuman = isHuman(state.current) && !state.over && !state.busy;
+    btnRoll.disabled = !activeHuman;
+    btnBank.disabled = !activeHuman || state.turnSum === 0;
   }
 
   function log(who, text, cls = "") {
     const entry = document.createElement("div");
     entry.className = "entry " + cls;
-    const label = who ? `<span class="who ${who}">${who === "player" ? "You" : "Computer"}:</span> ` : "";
+    const label = who ? `<span class="who ${who}">${displayName(who)}:</span> ` : "";
     entry.innerHTML = label + text;
     logEl.prepend(entry);
   }
@@ -437,11 +473,14 @@
     }
 
     render();
-    if (state.current === "agent") {
-      bannerEl.innerHTML = "<b>Computer</b> is taking its turn…";
+    const turnNo = turnsTaken(state.current) + 1;
+    if (!isHuman(state.current)) {
+      bannerEl.innerHTML = `<b>${displayName(state.current)}</b> is taking its turn…`;
       setTimeout(agentStep, 800);
+    } else if (state.mode === "pvp") {
+      bannerEl.innerHTML = `Pass the device — <b>${displayName(state.current)}'s turn</b> (${turnNo} of 3). Roll to begin.`;
     } else {
-      bannerEl.innerHTML = "Your move — roll to start turn " + (turnsTaken("player") + 1) + " of 3.";
+      bannerEl.innerHTML = `${movePhrase(state.current)} — roll to start turn ${turnNo} of 3.`;
     }
   }
 
@@ -465,26 +504,28 @@
   }
 
   btnRoll.addEventListener("click", () => {
-    if (state.current !== "player" || state.busy || state.over) return;
+    if (!isHuman(state.current) || state.busy || state.over) return;
+    const seat = state.current;
     const { value, bust } = applyRoll();
     animateRoll(value, () => {
       if (bust) {
-        log("player", `rolled a <b>${value}</b> — already rolled it. <b>BUST!</b> Turn lost.`, "bust");
+        log(seat, `rolled a <b>${value}</b> — already rolled it. <b>BUST!</b> Turn lost.`, "bust");
         bustTurn();
         render();
         setTimeout(endTurn, 700);
       } else {
-        log("player", `rolled a <b>${value}</b>. Turn sum is now <b>${state.turnSum}</b>.`);
+        log(seat, `rolled a <b>${value}</b>. Turn sum is now <b>${state.turnSum}</b>.`);
         render();
       }
     });
   });
 
   btnBank.addEventListener("click", () => {
-    if (state.current !== "player" || state.busy || state.over || state.turnSum === 0) return;
+    if (!isHuman(state.current) || state.busy || state.over || state.turnSum === 0) return;
+    const seat = state.current;
     const banked = state.turnSum;
     bankTurn();
-    log("player", `banked <b>+${banked}</b>. Total: <b>${state.totals.player}</b>.`, "bank");
+    log(seat, `banked <b>+${banked}</b>. Total: <b>${state.totals[seat]}</b>.`, "bank");
     render();
     setTimeout(endTurn, 500);
   });
@@ -562,9 +603,10 @@
     state.over = true;
     render();
     const p = state.totals.player, a = state.totals.agent;
+    const np = displayName("player"), na = displayName("agent");
     let title, text;
-    if (p > a) { title = "🏆 You win!"; text = `Final score — You ${p}, Computer ${a}.`; }
-    else if (a > p) { title = "Computer wins"; text = `Final score — Computer ${a}, You ${p}.`; }
+    if (p > a) { title = `🏆 ${np} win${np === "You" ? "" : "s"}!`; text = `Final score — ${np} ${p}, ${na} ${a}.`; }
+    else if (a > p) { title = `🏆 ${na} win${na === "You" ? "" : "s"}!`; text = `Final score — ${na} ${a}, ${np} ${p}.`; }
     else { title = "It's a tie!"; text = `Both finished on ${p}.`; }
     bannerEl.innerHTML = "Game over.";
     el("modal-title").textContent = title;
@@ -574,14 +616,26 @@
   }
 
   // ---------- Setup ----------
+  let activeMode = "cpu"; // tracks the selected tab across restarts
+
   function start() {
+    const mode = activeMode;
     const difficulty = el("difficulty").value;
     const firstMover = Math.random() < 0.5 ? "player" : "agent"; // coin flip each game
-    state = newState(firstMover, difficulty);
+    state = newState(mode, firstMover, difficulty);
     el("overlay").classList.remove("show");
     logEl.innerHTML = "";
     renderDie(0);
     render();
+
+    if (mode === "pvp") {
+      const winner = displayName(firstMover);
+      el("coin").textContent = `🪙 Coin flip: ${winner} goes first.`;
+      log("", `New 2-player game. Coin flip — <b>${winner} goes first</b>.`);
+      bannerEl.innerHTML = `<b>${winner}</b> won the toss — ${winner}, roll to begin.`;
+      // both seats are human; wait for the active player to act
+      return;
+    }
 
     const oppName = difficulty === "perfect" ? "the perfect (solved) opponent" : "the risk-aware opponent";
     if (firstMover === "player") {
@@ -595,6 +649,17 @@
       setTimeout(agentStep, 900);
     }
   }
+
+  // ---------- Mode tabs ----------
+  function selectMode(mode) {
+    activeMode = mode;
+    el("tab-cpu").classList.toggle("active", mode === "cpu");
+    el("tab-pvp").classList.toggle("active", mode === "pvp");
+    el("opp-setting").style.display = mode === "cpu" ? "" : "none"; // difficulty only matters vs computer
+    start();
+  }
+  el("tab-cpu").addEventListener("click", () => selectMode("cpu"));
+  el("tab-pvp").addEventListener("click", () => selectMode("pvp"));
 
   el("difficulty").addEventListener("change", start);
 
